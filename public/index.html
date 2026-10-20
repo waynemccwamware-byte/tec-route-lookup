@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEC Route Lookup</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="theme-color" content="#152238">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#10141a;
+    --bg-panel:#1b222c;
+    --bezel:#2a323f;
+    --bezel-hi:#3a4454;
+    --amber:#f5a623;
+    --amber-dim:#7a5a1e;
+    --amber-glow:rgba(245,166,35,0.35);
+    --text-primary:#e7e4dc;
+    --text-muted:#8b93a1;
+    --teal:#3fa7a0;
+    --focus:#f5a623;
+    --restrict:#e08a6b;
+    --mono:'IBM Plex Mono', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  html{ background:var(--bg-deep); overscroll-behavior:none; }
+  body{
+    min-height:100vh;
+    background:radial-gradient(ellipse at 50% 0%, #171d26 0%, var(--bg-deep) 60%);
+    color:var(--text-primary);
+    font-family:var(--sans);
+    overscroll-behavior:none;
+  }
+
+  .title-panel h1{margin:0 0 3px; font-size:1.28rem; font-weight:600; letter-spacing:0.01em;}
+  .title-panel p{margin:0; color:var(--text-muted); font-size:0.84rem; line-height:1.45;}
+  .title-panel .freshness-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-top:9px;
+  }
+  .freshness-inline{
+    font-size:0.8rem;
+    color:var(--text-muted);
+    font-family:var(--mono);
+    display:inline-block;
+    margin-top:3px;
+  }
+  .freshness-link{
+    font-family:var(--sans);
+    color:var(--text-muted);
+    text-decoration:none;
+    border-bottom:1px solid var(--bezel-hi);
+  }
+  .freshness-link:hover{color:var(--amber); border-bottom-color:var(--amber);}
+  .update-btn{
+    background:transparent;
+    border:1px solid var(--bezel-hi);
+    color:var(--text-muted);
+    border-radius:4px;
+    padding:4px 10px;
+    font-size:0.75rem;
+    font-family:var(--sans);
+    cursor:pointer;
+    transition:color 0.15s ease, border-color 0.15s ease;
+  }
+  .update-btn:hover{color:var(--amber); border-color:var(--amber);}
+  .update-btn:disabled{opacity:0.5; cursor:default;}
+  .update-result{font-size:0.76rem; color:var(--text-muted);}
+  .update-result.changed{color:var(--amber);}
+
+  main{max-width:760px; margin:0 auto; padding:16px 16px 28px;}
+
+  .panel{
+    background:var(--bg-panel);
+    border:1px solid var(--bezel);
+    border-radius:4px;
+    box-shadow:0 1px 0 rgba(255,255,255,0.03) inset, 0 14px 28px rgba(0,0,0,0.3);
+    padding:12px;
+    margin-bottom:16px;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    gap:10px 8px;
+    align-items:end;
+  }
+  @media (max-width:520px){
+    .grid{grid-template-columns:1fr;}
+    .swap-field{order:2; justify-self:center;}
+    #dest{order:3;}
+  }
+  .swap-field{display:flex; justify-content:center; padding-bottom:6px;}
+  .swap-btn{
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    border:1px solid var(--bezel-hi);
+    background:transparent;
+    color:var(--text-muted);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    transition:color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  }
+  .swap-btn:hover{color:var(--amber); border-color:var(--amber);}
+  .swap-btn:active{transform:rotate(180deg);}
+  .swap-btn svg{width:15px; height:15px;}
+  .aircraft-field{grid-column:1 / -1;}
+  .home-screen-tip-appicon{
+    width:34px;
+    height:34px;
+    flex-shrink:0;
+  }
+  .install-btn{white-space:nowrap;}
+  #installBtnTop{margin-left:auto;}
+  .modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.55);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    z-index:100;
+  }
+  .modal-box{
+    background:var(--bg-panel);
+    border:1px solid var(--bezel);
+    border-radius:6px;
+    padding:20px;
+    max-width:340px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:12px;
+    text-align:center;
+    position:relative;
+  }
+  .modal-close{
+    position:absolute;
+    top:8px;
+    right:10px;
+    background:none;
+    border:none;
+    color:var(--text-muted);
+    font-size:1.3rem;
+    line-height:1;
+    cursor:pointer;
+  }
+  .modal-close:hover{color:var(--amber);}
+  .modal-text{
+    font-size:0.86rem;
+    color:var(--text-muted);
+    line-height:1.5;
+  }
+  .modal-text strong{color:var(--text-primary);}
+
+  .field label{
+    display:block;
+    font-size:0.7rem;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--text-muted);
+    margin-bottom:4px;
+  }
+  select, .combo-input{
+    width:100%;
+    font-family:var(--mono);
+    font-size:1rem;
+    padding:7px 8px;
+    border:1px solid var(--bezel-hi);
+    border-radius:4px;
+    background:#0b0e12;
+    color:var(--text-primary);
+  }
+  .combo-wrap{position:relative;}
+  .combo-input{padding-right:30px;}
+  .combo-menu{
+    display:none;
+    position:absolute;
+    top:calc(100% + 2px);
+    left:0;
+    right:0;
+    max-height:220px;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-y;
+    background:#0b0e12;
+    border:1px solid var(--bezel-hi);
+    border-radius:4px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.4);
+    z-index:20;
+  }
+  .combo-item{
+    padding:7px 9px;
+    font-family:var(--mono);
+    font-size:0.95rem;
+    color:var(--text-primary);
+    cursor:pointer;
+  }
+  .combo-item:hover, .combo-item.active{background:rgba(245,166,35,0.15); color:var(--amber);}
+  .combo-clear{
+    position:absolute;
+    top:50%;
+    right:6px;
+    transform:translateY(-50%);
+    width:20px;
+    height:20px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:none;
+    border:none;
+    color:var(--text-muted);
+    cursor:pointer;
+    padding:0;
+  }
+  .combo-clear svg{width:14px; height:14px;}
+  .combo-clear:hover{color:var(--amber);}
+  select:disabled, .combo-input:disabled{color:var(--text-muted); background:var(--bg-panel);}
+  select:focus, .combo-input:focus{outline:2px solid var(--focus); outline-offset:1px; border-color:var(--amber);}
+  .combo-input::placeholder{color:var(--text-muted); font-family:var(--sans); font-size:0.85rem;}
+  .field-hint{font-size:0.71rem; color:var(--text-muted); margin-top:3px; min-height:1.1em;}
+  .field-hint.bad{color:var(--restrict);}
+
+  .checkbox-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:12px;
+    font-size:0.9rem;
+  }
+  .checkbox-row input{width:17px; height:17px; accent-color:var(--amber);}
+  .checkbox-row .hint{color:var(--text-muted); font-size:0.77rem; margin-left:24px; margin-top:-3px;}
+
+  .aircraft-checks{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 18px;
+  }
+  .aircraft-checks .chk{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:0.85rem;
+    color:var(--text-primary);
+    cursor:pointer;
+  }
+  .aircraft-checks .chk input{width:16px; height:16px; accent-color:var(--amber); cursor:pointer;}
+
+  .go{
+    margin-top:14px;
+    width:100%;
+    background:var(--amber);
+    color:#1a1305;
+    border:none;
+    border-radius:4px;
+    padding:10px 16px;
+    font-size:0.96rem;
+    font-weight:600;
+    font-family:var(--sans);
+    cursor:pointer;
+    transition:background 0.15s ease, transform 0.05s ease;
+  }
+  .go:disabled{background:var(--bezel-hi); color:var(--text-muted); cursor:not-allowed;}
+  .go:not(:disabled):hover{background:#ffb43d;}
+  .go:not(:disabled):active{transform:scale(0.995);}
+
+  #results{margin-top:4px;}
+
+  .variant-note{
+    font-size:0.77rem;
+    color:var(--text-muted);
+    margin-bottom:9px;
+  }
+
+  .route-card{
+    border:1px solid var(--bezel);
+    border-left:3px solid var(--amber);
+    border-radius:4px;
+    padding:10px 12px;
+    margin-bottom:9px;
+    background:var(--bg-panel);
+  }
+  .route-card.east{border-left-color:var(--teal);}
+  .route-card .top{
+    display:flex;
+    align-items:baseline;
+    gap:9px;
+    flex-wrap:wrap;
+    margin-bottom:7px;
+  }
+  .route-card .code{
+    font-family:var(--mono);
+    font-weight:600;
+    font-size:0.94rem;
+    color:var(--amber);
+    text-shadow:0 0 10px var(--amber-glow);
+    background:rgba(245,166,35,0.12);
+    padding:2px 7px;
+    border-radius:3px;
+  }
+  .route-card .east-tag{
+    font-size:0.71rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--teal);
+    background:rgba(63,167,160,0.14);
+    padding:2px 6px;
+    border-radius:3px;
+  }
+  .route-card .seq{font-size:0.74rem; color:var(--text-muted);}
+  .route-card .route-row{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:9px;
+    margin-bottom:8px;
+  }
+  .route-card .route-string{
+    font-family:var(--mono);
+    font-size:1.01rem;
+    line-height:1.45;
+    word-break:break-word;
+    color:var(--text-primary);
+  }
+  .copy-btn{
+    flex-shrink:0;
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    background:transparent;
+    border:1px solid var(--bezel-hi);
+    color:var(--text-muted);
+    border-radius:4px;
+    padding:4px 8px;
+    font-size:0.73rem;
+    font-family:var(--sans);
+    cursor:pointer;
+    white-space:nowrap;
+    transition:color 0.15s ease, border-color 0.15s ease;
+  }
+  .copy-btn:hover{color:var(--amber); border-color:var(--amber);}
+  .copy-btn svg{width:13px; height:13px;}
+  .meta-row{display:flex; flex-wrap:wrap; gap:5px 7px; font-size:0.77rem;}
+  .chip{background:#0b0e12; border:1px solid var(--bezel); border-radius:3px; padding:2px 7px; color:var(--text-primary);}
+  .chip.restrict{background:rgba(224,138,107,0.12); border-color:rgba(224,138,107,0.4); color:var(--restrict);}
+  .chip .k{color:var(--text-muted); margin-right:4px;}
+
+  .msg{padding:10px 12px; border-radius:4px; font-size:0.89rem; line-height:1.5; border:1px solid var(--bezel);}
+  .msg.empty{background:var(--bg-panel); color:var(--text-muted);}
+  .msg.error{background:rgba(224,138,107,0.1); color:var(--restrict); border-color:rgba(224,138,107,0.35);}
+  .msg.loading{background:var(--bg-panel); color:var(--text-muted);}
+
+  .legend{
+    margin-top:14px;
+    font-size:0.77rem;
+    color:var(--text-muted);
+    line-height:1.55;
+    border-top:1px solid var(--bezel);
+    padding-top:10px;
+  }
+  .legend strong{color:var(--text-primary);}
+
+  .page-footer{
+    max-width:760px;
+    margin:18px auto 0;
+    padding:14px 20px 32px;
+    border-top:1px solid var(--bezel);
+    text-align:center;
+  }
+  .back-link{
+    margin-bottom:10px;
+  }
+  .back-link a{
+    display:inline-block;
+    background:var(--bezel);
+    color:var(--amber);
+    text-decoration:none;
+    border:1px solid var(--bezel-hi);
+    border-radius:5px;
+    padding:6px 14px;
+    font-size:12px;
+  }
+  .back-link a:hover{ background:var(--bezel-hi); }
+  .credit-line{
+    margin-top:0;
+    font-size:12px;
+    color:var(--text-muted);
+  }
+  .credit-line a{
+    color:var(--text-muted);
+    text-decoration:none;
+    border-bottom:1px solid var(--bezel-hi);
+  }
+  .credit-line a:hover{color:var(--amber); border-bottom-color:var(--amber);}
+  .hit-counter{
+    margin-top:8px;
+    text-align:center;
+    font-size:11px;
+    color:var(--text-muted);
+  }
+  .share-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    margin-top:14px;
+    background:transparent;
+    border:1px solid var(--bezel-hi);
+    border-radius:20px;
+    padding:8px 16px;
+    color:var(--text-muted);
+    font-family:var(--sans);
+    font-size:12.5px;
+    cursor:pointer;
+    transition:color 0.15s ease, border-color 0.15s ease;
+  }
+  .share-btn:hover{color:var(--amber); border-color:var(--amber);}
+  .share-icon{width:15px; height:15px; flex-shrink:0;}
+</style>
+</head>
+<body>
+
+<main>
+
+  <section class="panel title-panel">
+    <h1>TEC Route Lookup</h1>
+    <p>Tower Enroute Control routes, fetched fresh from the FAA's own preferred-routes database on every server request &mdash; no third-party or simulation-network data involved. <span id="freshness" class="freshness-inline"></span></p>
+    <div class="freshness-row">
+      <button class="update-btn" id="updateBtn">Update FAA data</button>
+      <span class="update-result" id="updateResult"></span>
+      <button class="update-btn install-btn" id="installBtnTop" style="display:none;">Add this app to Home Screen/Desktop</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="grid">
+      <div class="field">
+        <label for="origin">Departure</label>
+        <div class="combo-wrap">
+          <input type="text" id="origin" class="combo-input" autocomplete="off" placeholder="Loading airports&hellip;" disabled>
+          <button type="button" class="combo-clear" id="originClear" title="Clear departure" aria-label="Clear departure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          <div class="combo-menu" id="originMenu"></div>
+        </div>
+        <div class="field-hint" id="originHint"></div>
+      </div>
+      <div class="swap-field">
+        <button type="button" class="swap-btn" id="swapBtn" title="Swap departure and destination" aria-label="Swap departure and destination">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="17 1 21 5 17 9"/>
+            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+            <polyline points="7 23 3 19 7 15"/>
+            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+          </svg>
+        </button>
+      </div>
+      <div class="field">
+        <label for="dest">Destination</label>
+        <div class="combo-wrap">
+          <input type="text" id="dest" class="combo-input" autocomplete="off" placeholder="Select departure first" disabled>
+          <button type="button" class="combo-clear" id="destClear" title="Clear destination" aria-label="Clear destination"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          <div class="combo-menu" id="destMenu"></div>
+        </div>
+        <div class="field-hint" id="destHint"></div>
+      </div>
+      <div class="field aircraft-field">
+        <label>Aircraft classification</label>
+        <div class="aircraft-checks" id="aircraftChecks">
+          <label class="chk"><input type="checkbox" value="J"> Jet (J)</label>
+          <label class="chk"><input type="checkbox" value="M"> Turboprop / Special (M)</label>
+          <label class="chk"><input type="checkbox" value="P"> Piston, fast (P)</label>
+          <label class="chk"><input type="checkbox" value="Q" checked> Piston (Q)</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="landingEast">
+      <label for="landingEast">LAX landing East</label>
+    </div>
+    <div class="hint">Leave unchecked for the standard/West configuration.</div>
+
+    <button class="go" id="searchBtn" disabled>Find routes</button>
+  </section>
+
+  <div id="results"></div>
+
+  <div class="legend">
+    <strong>Aircraft classification</strong> checkboxes are applied where the FAA data encodes it (either as letters baked into the altitude field, e.g. "JM110PQ70", or as plain-language restrictions in the aircraft/notes field); check as many as apply. Routes that carry no classification info for this pair are always shown, since they apply regardless of aircraft type. <strong>Landing East</strong> filters to route variants explicitly marked for LAX's East configuration when both exist; if only one variant exists for a pair, it's shown regardless of the checkbox. Departure/Destination accept either the 4-letter ICAO code (e.g. KSBA) or the 3-letter FAA identifier (e.g. SBA) and always display as the 4-letter form. Always cross-check against the current Chart Supplement or your EFB before filing.
+  </div>
+
+</main>
+
+<div class="page-footer">
+  <div class="back-link"><a href="https://geezer-geek-pilot-control-panel.netlify.app">&larr; Back to GeezerGeek Pilot Apps</a></div>
+  <div class="credit-line">Wayne McClelland, <a href="https://youtube.com/@GeezerGeekPilot" target="_blank" rel="noopener">GeezerGeek Pilot</a>, <a href="https://docs.google.com/document/d/1chfDa3JBCjsGykGjwrAFwOqMAS7d3_dIY9ieROLCIyU/edit?usp=sharing" target="_blank" rel="noopener">Reference Materials</a></div>
+  <div class="hit-counter" id="hitCounter"></div>
+
+  <button id="shareBtn" class="share-btn" type="button">
+    <svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="18" cy="5" r="3"/>
+      <circle cx="6" cy="12" r="3"/>
+      <circle cx="18" cy="19" r="3"/>
+      <line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/>
+      <line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/>
+    </svg>
+    <span>Share this app with pilot friends</span>
+  </button>
+  <button id="installBtnFooter" class="share-btn install-btn" type="button" style="display:none;">
+    <svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v13"/>
+      <polyline points="7 8 12 3 17 8"/>
+      <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>
+    </svg>
+    <span>Add this app to Home Screen/Desktop</span>
+  </button>
+</div>
+
+<div id="iosInstallModal" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <button class="modal-close" id="iosModalClose" aria-label="Close">&times;</button>
+    <svg class="home-screen-tip-appicon" viewBox="0 0 44 44" style="width:34px;height:34px;">
+      <rect x="1" y="1" width="42" height="42" rx="10" fill="#9aa2ae"/>
+      <text x="22" y="30" text-anchor="middle" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" font-size="24" font-weight="600" fill="#ffffff">T</text>
+    </svg>
+    <div class="modal-text">
+      <strong>Add this app to your iOS home screen:</strong> 1. Tap the Send icon in the very upper right. 2. Tap <strong>View More</strong> in the lower right, then scroll down and tap <strong>Add to Home Screen</strong>.
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const FN = '/.netlify/functions/tec-lookup';
+  const LS_ORIGIN = 'tecLookup.lastOrigin';
+  const LS_DEST = 'tecLookup.lastDest';
+
+  const originInput = document.getElementById('origin');
+  const destInput = document.getElementById('dest');
+  const originClear = document.getElementById('originClear');
+  const destClear = document.getElementById('destClear');
+  const originMenu = document.getElementById('originMenu');
+  const destMenu = document.getElementById('destMenu');
+  const originHint = document.getElementById('originHint');
+  const destHint = document.getElementById('destHint');
+  const aircraftChecks = document.getElementById('aircraftChecks');
+  const landingEastChk = document.getElementById('landingEast');
+  const searchBtn = document.getElementById('searchBtn');
+  const swapBtn = document.getElementById('swapBtn');
+  const results = document.getElementById('results');
+  const freshness = document.getElementById('freshness');
+  const updateResult = document.getElementById('updateResult');
+  const updateBtn = document.getElementById('updateBtn');
+
+  let validOrigins = [];      // 3-letter FAA identifiers, as the FAA source uses
+  let validDestinations = [];
+  let lastLoadedOrigin = null; // 3-letter, internal
+
+  function safeGet(key){ try{ return localStorage.getItem(key); }catch(e){ return null; } }
+  function safeSet(key, val){ try{ localStorage.setItem(key, val); }catch(e){ /* ignore */ } }
+
+  // Accepts either a 4-letter ICAO code (K-prefixed) or the bare 3-letter FAA identifier;
+  // returns the 3-letter form used internally to match the FAA source data.
+  function toQuery(v){
+    v = (v || '').trim().toUpperCase();
+    if(v.length === 4 && v[0] === 'K') v = v.slice(1);
+    return v;
+  }
+  // Always display as the 4-letter ICAO form.
+  function toDisplay(code3){
+    return code3 ? 'K' + code3 : '';
+  }
+
+  function formatDate(ts){
+    const d = new Date(ts);
+    const day = String(d.getDate()).padStart(2, '0');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return day + '-' + months[d.getMonth()] + '-' + d.getFullYear();
+  }
+
+  const FAA_QUERY_PAGE = 'https://www.fly.faa.gov/rmt/nfdc_preferred_routes_database.jsp';
+
+  function showFreshness(data){
+    const link = '<a href="' + FAA_QUERY_PAGE + '" target="_blank" rel="noopener" class="freshness-link">Verify on FAA.gov</a>';
+    if(data.effectiveFrom && data.effectiveUntil){
+      freshness.innerHTML = 'FAA data source: effective ' + formatDate(data.effectiveFrom) +
+        ' until ' + formatDate(data.effectiveUntil) + '. ' + link;
+      freshness.title = 'From the FAA\u2019s own Preferred Routes Database query page, fetched ' + formatDate(data.fetchedAt) + '.';
+    } else if(data.fetchedAt){
+      freshness.innerHTML = 'FAA data source: fetched ' + formatDate(data.fetchedAt) +
+        ' (effective-date range unavailable this time). ' + link;
+    }
+  }
+
+  // ---- Custom dropdown (replaces native <datalist>, which iOS Safari supports
+  // only partially/inconsistently — e.g. it often shows nothing on an empty,
+  // freshly-focused field). This version is built entirely in JS/CSS so its
+  // behavior is identical across iPhone, Android, and desktop. ----
+  let originMenuItems = [];
+  let originMenuActive = -1;
+  let destMenuItems = [];
+  let destMenuActive = -1;
+
+  function filterCodes(values3, raw){
+    const q = (raw || '').trim().toUpperCase();
+    if(!q) return values3;
+    return values3.filter(v => toDisplay(v).includes(q) || v.includes(q));
+  }
+
+  function renderMenu(menuEl, items, activeIndex){
+    menuEl.innerHTML = items
+      .map((v, i) => '<div class="combo-item' + (i === activeIndex ? ' active' : '') + '" data-code="' + v + '">' + toDisplay(v) + '</div>')
+      .join('');
+  }
+
+  function openMenu(inputEl, menuEl, allValues, itemsSetter){
+    if(inputEl.disabled) return;
+    const items = filterCodes(allValues, inputEl.value);
+    itemsSetter(items);
+    renderMenu(menuEl, items, -1);
+    menuEl.style.display = items.length ? 'block' : 'none';
+    if(items.length) scrollMenuIntoView(inputEl, menuEl);
+  }
+
+  function closeMenu(menuEl){
+    menuEl.style.display = 'none';
+    menuEl.innerHTML = '';
+  }
+
+  // On iOS, the on-screen keyboard shrinks the visible area but the page itself
+  // doesn't auto-scroll to keep a dropdown below the focused field in view — the
+  // keyboard just covers it, which is what "have to drag to see the list" was.
+  // window.visualViewport reports the actual visible height (keyboard excluded),
+  // so we scroll just enough to bring the menu inside that visible area. We also
+  // re-run this on visualViewport 'resize', since the keyboard animates in after
+  // focus and may not have finished covering the screen yet when we first check.
+  function scrollMenuIntoView(inputEl, menuEl){
+    requestAnimationFrame(() => {
+      const vv = window.visualViewport;
+      const visibleHeight = vv ? vv.height : window.innerHeight;
+      const visibleTop = vv ? vv.offsetTop : 0;
+      const menuRect = menuEl.getBoundingClientRect();
+      const overflow = menuRect.bottom - (visibleTop + visibleHeight);
+      if(overflow > 0){
+        window.scrollBy({ top: overflow + 12, behavior: 'smooth' });
+      }
+    });
+  }
+
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', () => {
+      if(originMenu.style.display === 'block') scrollMenuIntoView(originInput, originMenu);
+      if(destMenu.style.display === 'block') scrollMenuIntoView(destInput, destMenu);
+    });
+  }
+
+  function wireCombo({ input, clearBtn, menu, clear, getAllValues, setItems, getItems, getActive, setActive, onPick, onCommit }){
+    input.addEventListener('focus', () => openMenu(input, menu, getAllValues(), setItems));
+    // Clicking a field that's already focused (menu previously closed via blur/Escape/
+    // pick) doesn't refire 'focus', so this catches that case and reopens the list.
+    input.addEventListener('click', () => {
+      if(menu.style.display !== 'block') openMenu(input, menu, getAllValues(), setItems);
+    });
+    input.addEventListener('input', () => {
+      onCommit();
+      openMenu(input, menu, getAllValues(), setItems);
+    });
+    input.addEventListener('keydown', (e) => {
+      const items = getItems();
+      if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+        if(!items.length) return;
+        e.preventDefault();
+        let next = getActive() + (e.key === 'ArrowDown' ? 1 : -1);
+        if(next < 0) next = items.length - 1;
+        if(next >= items.length) next = 0;
+        setActive(next);
+        renderMenu(menu, items, next);
+      } else if(e.key === 'Enter'){
+        const active = getActive();
+        if(active >= 0 && items[active]){
+          e.preventDefault();
+          onPick(items[active]);
+          closeMenu(menu);
+        } else {
+          onCommit();
+        }
+      } else if(e.key === 'Escape'){
+        closeMenu(menu);
+      }
+    });
+    input.addEventListener('blur', () => setTimeout(() => closeMenu(menu), 150));
+    // Plain 'click' (not 'pointerdown'+preventDefault) — the browser already tells
+    // taps and scroll/drag gestures apart for us: click only fires for a genuine
+    // tap, never after a scroll, so this doesn't interfere with touch-scrolling the
+    // list. The 150ms delay on blur above keeps the menu in the DOM long enough for
+    // this click to still register even though the input blurred a moment earlier.
+    menu.addEventListener('click', (e) => {
+      const item = e.target.closest('.combo-item');
+      if(!item) return;
+      onPick(item.getAttribute('data-code'));
+      closeMenu(menu);
+    });
+    clearBtn.addEventListener('click', () => {
+      clear();
+      closeMenu(menu);
+      input.focus();
+      openMenu(input, menu, getAllValues(), setItems);
+    });
+  }
+
+  function showMessage(kind, html){
+    results.innerHTML = '<div class="msg ' + kind + '">' + html + '</div>';
+  }
+
+  function getSelectedClasses(){
+    return Array.from(aircraftChecks.querySelectorAll('input:checked')).map(cb => cb.value);
+  }
+
+  async function loadOrigins(){
+    showMessage('loading', 'Loading current airport list from FAA data\u2026');
+    try{
+      const res = await fetch(FN + '?action=origins');
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || 'Request failed');
+      validOrigins = data.origins || [];
+      originInput.disabled = false;
+      originInput.placeholder = 'e.g. KSBA or SBA';
+      showFreshness(data);
+      results.innerHTML = '';
+
+      const savedOrigin = safeGet(LS_ORIGIN);
+      if(savedOrigin && validOrigins.includes(savedOrigin)){
+        originInput.value = toDisplay(savedOrigin);
+        lastLoadedOrigin = savedOrigin;
+        await loadDestinations(savedOrigin);
+        const savedDest = safeGet(LS_DEST);
+        if(savedDest && validDestinations.includes(savedDest)){
+          destInput.value = toDisplay(savedDest);
+          searchBtn.disabled = false;
+        }
+      }
+    }catch(err){
+      showMessage('error', "Couldn't load the FAA data. " + escapeHTML(err.message) + ' Try reloading the page.');
+    }
+  }
+
+  async function loadDestinations(origin3){
+    destInput.value = '';
+    destInput.disabled = true;
+    destInput.placeholder = 'Loading\u2026';
+    destHint.textContent = '';
+    searchBtn.disabled = true;
+    validDestinations = [];
+    try{
+      const res = await fetch(FN + '?action=destinations&origin=' + encodeURIComponent(origin3));
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || 'Request failed');
+      validDestinations = data.destinations || [];
+      destInput.disabled = false;
+      destInput.placeholder = validDestinations.length
+        ? 'e.g. ' + toDisplay(validDestinations[0]) + ' or ' + validDestinations[0]
+        : 'No TEC destinations from here';
+      showFreshness(data);
+    }catch(err){
+      showMessage('error', "Couldn't load destinations. " + escapeHTML(err.message));
+    }
+  }
+
+  function commitOrigin(){
+    const raw = originInput.value;
+    if(!raw){ originHint.textContent = ''; originHint.className = 'field-hint'; return; }
+    const q = toQuery(raw);
+    if(validOrigins.includes(q)){
+      const disp = toDisplay(q);
+      if(originInput.value !== disp) originInput.value = disp;
+      originHint.textContent = '';
+      originHint.className = 'field-hint';
+      safeSet(LS_ORIGIN, q);
+      if(q !== lastLoadedOrigin){
+        lastLoadedOrigin = q;
+        results.innerHTML = '';
+        loadDestinations(q);
+      }
+    } else {
+      lastLoadedOrigin = null;
+      originHint.textContent = 'Not a recognized TEC departure.';
+      originHint.className = 'field-hint bad';
+      destInput.value = '';
+      destInput.disabled = true;
+      destInput.placeholder = 'Select a valid departure first';
+      searchBtn.disabled = true;
+    }
+  }
+
+  function commitDest(){
+    const raw = destInput.value;
+    if(!raw){ destHint.textContent = ''; destHint.className = 'field-hint'; searchBtn.disabled = true; return; }
+    const q = toQuery(raw);
+    if(validDestinations.includes(q)){
+      const disp = toDisplay(q);
+      if(destInput.value !== disp) destInput.value = disp;
+      destHint.textContent = '';
+      destHint.className = 'field-hint';
+      searchBtn.disabled = false;
+      safeSet(LS_DEST, q);
+    } else {
+      destHint.textContent = 'No TEC route to this airport from the selected departure.';
+      destHint.className = 'field-hint bad';
+      searchBtn.disabled = true;
+    }
+  }
+
+  // 'input' still calls commitOrigin/commitDest for validation as the user types or
+  // picks an item; the custom menu's pick handler sets the value directly and also
+  // calls onCommit, since setting .value via JS doesn't fire an 'input' event itself.
+  wireCombo({
+    input: originInput,
+    clearBtn: originClear,
+    menu: originMenu,
+    getAllValues: () => validOrigins,
+    setItems: (items) => { originMenuItems = items; originMenuActive = -1; },
+    getItems: () => originMenuItems,
+    getActive: () => originMenuActive,
+    setActive: (i) => { originMenuActive = i; },
+    onPick: (code3) => { originInput.value = toDisplay(code3); commitOrigin(); },
+    onCommit: commitOrigin,
+    clear: () => {
+      originInput.value = '';
+      originHint.textContent = '';
+      originHint.className = 'field-hint';
+      lastLoadedOrigin = null;
+      validDestinations = [];
+      destInput.value = '';
+      destInput.disabled = true;
+      destInput.placeholder = 'Select departure first';
+      destHint.textContent = '';
+      destHint.className = 'field-hint';
+      searchBtn.disabled = true;
+      results.innerHTML = '';
+    }
+  });
+
+  wireCombo({
+    input: destInput,
+    clearBtn: destClear,
+    menu: destMenu,
+    getAllValues: () => validDestinations,
+    setItems: (items) => { destMenuItems = items; destMenuActive = -1; },
+    getItems: () => destMenuItems,
+    getActive: () => destMenuActive,
+    setActive: (i) => { destMenuActive = i; },
+    onPick: (code3) => { destInput.value = toDisplay(code3); commitDest(); },
+    onCommit: commitDest,
+    clear: () => {
+      destInput.value = '';
+      destHint.textContent = '';
+      destHint.className = 'field-hint';
+      searchBtn.disabled = true;
+      results.innerHTML = '';
+    }
+  });
+
+  swapBtn.addEventListener('click', async () => {
+    const newOrigin = toQuery(destInput.value);
+    const newDest = toQuery(originInput.value);
+
+    if(!newOrigin){
+      showMessage('empty', 'Pick a destination first, then swap.');
+      return;
+    }
+    if(!validOrigins.includes(newOrigin)){
+      showMessage('empty', toDisplay(newOrigin) + ' has no TEC departures in this data, so this pair can\u2019t be reversed.');
+      return;
+    }
+
+    originInput.value = toDisplay(newOrigin);
+    lastLoadedOrigin = newOrigin;
+    results.innerHTML = '';
+    await loadDestinations(newOrigin);
+    safeSet(LS_ORIGIN, newOrigin);
+
+    if(newDest && validDestinations.includes(newDest)){
+      destInput.value = toDisplay(newDest);
+      destHint.textContent = '';
+      destHint.className = 'field-hint';
+      searchBtn.disabled = false;
+      safeSet(LS_DEST, newDest);
+    } else {
+      searchBtn.disabled = true;
+      showMessage('empty', 'No TEC route from ' + toDisplay(newOrigin) + ' back to ' + toDisplay(newDest) + ' \u2014 pick a destination.');
+    }
+  });
+
+  async function forceUpdate(){
+    updateBtn.disabled = true;
+    updateBtn.textContent = 'Updating\u2026';
+    updateResult.textContent = '';
+    updateResult.className = 'update-result';
+    const prevOrigin = toQuery(originInput.value);
+    const prevDest = toQuery(destInput.value);
+    try{
+      const res = await fetch(FN + '?action=origins&refresh=1');
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || 'Request failed');
+      validOrigins = data.origins || [];
+      showFreshness(data);
+
+      if(data.diff){
+        if(data.diff.total === 0){
+          updateResult.textContent = 'No changes found.';
+        } else {
+          const parts = [];
+          if(data.diff.added) parts.push(data.diff.added + ' added');
+          if(data.diff.removed) parts.push(data.diff.removed + ' removed');
+          if(data.diff.changed) parts.push(data.diff.changed + ' changed');
+          updateResult.textContent = data.diff.total + ' route' + (data.diff.total === 1 ? '' : 's') + ' changed (' + parts.join(', ') + ').';
+          updateResult.className = 'update-result changed';
+        }
+      } else {
+        updateResult.textContent = 'Refreshed \u2014 no prior snapshot to compare yet.';
+      }
+
+      if(prevOrigin && validOrigins.includes(prevOrigin)){
+        originInput.value = toDisplay(prevOrigin);
+        lastLoadedOrigin = prevOrigin;
+        await loadDestinations(prevOrigin);
+        if(prevDest && validDestinations.includes(prevDest)){
+          destInput.value = toDisplay(prevDest);
+          searchBtn.disabled = false;
+        }
+      }
+    }catch(err){
+      showMessage('error', "Couldn't refresh FAA data. " + escapeHTML(err.message));
+    }finally{
+      updateBtn.disabled = false;
+      updateBtn.textContent = 'Update FAA data';
+    }
+  }
+
+  function parseAltitudeClasses(altStr){
+    const out = [];
+    const re = /([JMPQ]+)(\d+)/g;
+    let m;
+    while((m = re.exec(altStr)) !== null){
+      out.push({ classes: m[1].split(''), altitude: m[2] });
+    }
+    return out;
+  }
+
+  function aircraftTextImplies(text, cls){
+    const t = (text || '').toUpperCase();
+    if(!t) return null;
+    const jetish = /TURBOJET|JETS ONLY|JET ONLY/.test(t);
+    const singleEngine = /SINGLE ENGINE/.test(t);
+    const propish = /PROP/.test(t) && !jetish;
+    if(cls === 'J') return jetish ? true : (singleEngine || propish ? false : null);
+    if(cls === 'Q' || cls === 'P') return singleEngine || propish ? true : (jetish ? false : null);
+    if(cls === 'M') return propish ? true : (jetish ? false : null);
+    return null;
+  }
+
+  function rowMatchesClasses(row, selectedClasses){
+    if(!selectedClasses.length) return true;
+    const altGroups = parseAltitudeClasses(row['Altitude'] || '');
+    if(altGroups.length){
+      return altGroups.some(g => g.classes.some(c => selectedClasses.includes(c)));
+    }
+    let anyTrue = false, allFalse = true;
+    selectedClasses.forEach(cls => {
+      const v = aircraftTextImplies(row['Aircraft'], cls);
+      if(v === true) anyTrue = true;
+      if(v !== false) allFalse = false;
+    });
+    if(anyTrue) return true;
+    if(allFalse) return false;
+    return true;
+  }
+
+  function rowIsEastVariant(row){
+    const blob = ((row['Area'] || '') + ' ' + (row['Route String'] || '')).toUpperCase();
+    return /\(LAXE\)|LAXE\b/.test(blob);
+  }
+
+  function chip(label, value, restrict){
+    return '<span class="chip' + (restrict ? ' restrict' : '') + '"><span class="k">' + label + ':</span>' + escapeHTML(value) + '</span>';
+  }
+
+  function escapeHTML(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function copyText(text){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      try{ await navigator.clipboard.writeText(text); return 'copied'; }catch(e){ /* fall through */ }
+    }
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if(ok) return 'copied';
+    }catch(e){ /* fall through */ }
+    try{ window.prompt('Copy this route:', text); }catch(e){ /* ignore */ }
+    return 'manual';
+  }
+
+  const copyIconSVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+
+  // Strips the leading/trailing airport-code tokens from a route string, comparing
+  // against this row's own Orig/Dest — some ARTCCs' data includes the origin as the
+  // first token and/or the destination as the last, others don't, so we check rather
+  // than assume a fixed format.
+  function stripAirportTokens(routeString, orig, dest){
+    const tokens = routeString.trim().split(/\s+/).filter(Boolean);
+    if(tokens.length && orig && tokens[0].toUpperCase() === orig.toUpperCase()){
+      tokens.shift();
+    }
+    if(tokens.length && dest && tokens[tokens.length - 1].toUpperCase() === dest.toUpperCase()){
+      tokens.pop();
+    }
+    return tokens.join(' ');
+  }
+
+  function renderCard(r, isEast){
+    const code = (r['Direction']||'').trim();
+    const altitude = (r['Altitude']||'').trim();
+    const aircraft = (r['Aircraft']||'').trim();
+    const area = (r['Area']||'').trim();
+    const hours = [r['Hours1'], r['Hours2'], r['Hours3']].map(h => (h||'').trim()).filter(Boolean).join(', ');
+    const seq = (r['Seq']||'').trim();
+    const routeString = r['Route String'] || '';
+    const copyRoute = stripAirportTokens(routeString, r['Orig'], r['Dest']);
+
+    let chips = '';
+    if(altitude) chips += chip('Altitude/class', altitude);
+    if(aircraft) chips += chip('Restriction', aircraft, true);
+    if(hours) chips += chip('Hours', hours);
+    if(area) chips += chip('Notes', area);
+
+    return (
+      '<div class="route-card' + (isEast ? ' east' : '') + '">' +
+        '<div class="top">' +
+          (code ? '<span class="code">' + escapeHTML(code) + '</span>' : '') +
+          (isEast ? '<span class="east-tag">LAX East</span>' : '') +
+          (seq ? '<span class="seq">option ' + escapeHTML(seq) + '</span>' : '') +
+        '</div>' +
+        '<div class="route-row">' +
+          '<div class="route-string">' + escapeHTML(copyRoute) + '</div>' +
+          '<button class="copy-btn" type="button" data-route="' + escapeHTML(copyRoute) + '">' + copyIconSVG + '<span>Copy</span></button>' +
+        '</div>' +
+        (chips ? '<div class="meta-row">' + chips + '</div>' : '') +
+      '</div>'
+    );
+  }
+
+  results.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.copy-btn');
+    if(!btn) return;
+    const route = btn.getAttribute('data-route');
+    const label = btn.querySelector('span');
+    const original = label.textContent;
+    const result = await copyText(route);
+    label.textContent = result === 'copied' ? 'Copied!' : 'See prompt';
+    setTimeout(() => { label.textContent = original; }, 1800);
+  });
+
+  async function runSearch(){
+    const origin = toQuery(originInput.value);
+    const dest = toQuery(destInput.value);
+    const selectedClasses = getSelectedClasses();
+    const wantEast = landingEastChk.checked;
+
+    if(!origin || !dest){
+      showMessage('empty', 'Choose both a departure and a destination.');
+      return;
+    }
+
+    showMessage('loading', 'Looking up ' + toDisplay(origin) + ' \u2192 ' + toDisplay(dest) + '\u2026');
+    try{
+      const res = await fetch(FN + '?action=routes&origin=' + encodeURIComponent(origin) + '&dest=' + encodeURIComponent(dest));
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || 'Request failed');
+      showFreshness(data);
+
+      let rows = data.routes || [];
+      if(rows.length === 0){
+        showMessage('empty', 'No TEC route found for ' + toDisplay(origin) + ' \u2192 ' + toDisplay(dest) + ' in the current FAA data.');
+        return;
+      }
+
+      const classFiltered = rows.filter(r => rowMatchesClasses(r, selectedClasses));
+      const pool = classFiltered.length ? classFiltered : rows;
+
+      const eastRows = pool.filter(rowIsEastVariant);
+      const normalRows = pool.filter(r => !rowIsEastVariant(r));
+
+      let shown, note;
+      if(wantEast){
+        shown = eastRows.length ? eastRows : pool;
+        note = eastRows.length ? 'Showing LAX East configuration routes.' :
+          'No East-specific variant for this pair \u2014 showing all matching routes.';
+      } else {
+        shown = normalRows.length ? normalRows : pool;
+        note = normalRows.length ? 'Showing standard/West configuration routes.' :
+          'This pair only has an East-configuration route \u2014 showing it regardless.';
+      }
+
+      if(classFiltered.length === 0){
+        note += ' No route for this pair was tagged for the selected aircraft classification(s), so all classes are shown \u2014 check the altitude/restriction fields below.';
+      }
+
+      results.innerHTML = '<div class="variant-note">' + escapeHTML(note) + '</div>' +
+        shown.map(r => renderCard(r, rowIsEastVariant(r))).join('');
+    }catch(err){
+      showMessage('error', "Couldn't complete the lookup. " + escapeHTML(err.message));
+    }
+  }
+
+  searchBtn.addEventListener('click', runSearch);
+  updateBtn.addEventListener('click', forceUpdate);
+
+  const APP_URL = 'https://tec-route-lookup.netlify.app/'; // TODO: update once the real Netlify site name is known
+  const shareBtn = document.getElementById('shareBtn');
+  shareBtn.addEventListener('click', async () => {
+    const shareData = {
+      title: 'TEC Route Lookup',
+      text: 'FAA-sourced Tower Enroute Control route lookup.',
+      url: APP_URL
+    };
+    const label = shareBtn.querySelector('span');
+    const originalLabel = label.textContent;
+
+    if (navigator.share){
+      try { await navigator.share(shareData); }
+      catch (err) { /* user cancelled the share sheet — not an error */ }
+      return;
+    }
+
+    const result = await copyText(APP_URL);
+    if(result === 'copied'){
+      label.textContent = 'Link copied to clipboard!';
+      setTimeout(() => { label.textContent = originalLabel; }, 2200);
+    }
+  });
+
+  fetch('https://tally.yuki.sh/hits/wamware/tec-route-lookup.json')
+    .then(r => r.json())
+    .then(data => {
+      const hitCounterEl = document.getElementById('hitCounter');
+      if (hitCounterEl && data && typeof data.visit !== 'undefined'){
+        hitCounterEl.textContent = 'Opened ' + data.visit + ' time' + (data.visit === 1 ? '' : 's');
+      }
+    })
+    .catch(() => { /* fail silently — not essential */ });
+
+  // ---- Add to Home Screen / Desktop ----
+  // Chrome/Edge (desktop and Android) expose a real install prompt via
+  // 'beforeinstallprompt'. iOS is required by Apple to run every browser on
+  // WebKit, so no iOS browser — not Safari, not Chrome-for-iOS, not Edge-for-iOS —
+  // ever fires that event or offers a scriptable install path; there, the button
+  // instead shows the manual Share-sheet steps.
+  const installBtnTop = document.getElementById('installBtnTop');
+  const installBtnFooter = document.getElementById('installBtnFooter');
+  const iosModal = document.getElementById('iosInstallModal');
+  const iosModalClose = document.getElementById('iosModalClose');
+  let deferredInstallPrompt = null;
+
+  function isIOSDevice(){
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS reports as Mac
+  }
+  function isStandalone(){
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+
+  function refreshInstallButtons(){
+    const show = !isStandalone() && (deferredInstallPrompt || isIOSDevice());
+    installBtnTop.style.display = show ? '' : 'none';
+    installBtnFooter.style.display = show ? '' : 'none';
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    refreshInstallButtons();
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    refreshInstallButtons();
+  });
+
+  async function handleInstallClick(){
+    if(deferredInstallPrompt){
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      refreshInstallButtons();
+    } else if(isIOSDevice()){
+      iosModal.style.display = 'flex';
+    }
+  }
+
+  installBtnTop.addEventListener('click', handleInstallClick);
+  installBtnFooter.addEventListener('click', handleInstallClick);
+  iosModalClose.addEventListener('click', () => { iosModal.style.display = 'none'; });
+  iosModal.addEventListener('click', (e) => { if(e.target === iosModal) iosModal.style.display = 'none'; });
+
+  refreshInstallButtons();
+
+  loadOrigins();
+})();
+</script>
+
+</body>
+</html>
