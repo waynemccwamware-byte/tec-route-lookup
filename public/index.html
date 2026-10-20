@@ -38,6 +38,8 @@
   }
 
   .title-panel h1{margin:0 0 3px; font-size:1.28rem; font-weight:600; letter-spacing:0.01em;}
+  .title-panel .title-row{display:flex; align-items:baseline; justify-content:space-between; gap:10px;}
+  .title-panel .ver{font-family:var(--mono); font-size:11px; color:var(--text-muted); white-space:nowrap;}
   .title-panel p{margin:0; color:var(--text-muted); font-size:0.84rem; line-height:1.45;}
   .title-panel .freshness-row{
     display:flex;
@@ -434,7 +436,7 @@
 <main>
 
   <section class="panel title-panel">
-    <h1>TEC Route Lookup</h1>
+    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.1</span></div>
     <p>Tower Enroute Control routes, fetched fresh from the FAA's own preferred-routes database on every server request &mdash; no third-party or simulation-network data involved. <span id="freshness" class="freshness-inline"></span></p>
     <div class="freshness-row">
       <button class="update-btn" id="updateBtn">Update FAA data</button>
@@ -581,11 +583,17 @@
     return code3 ? 'K' + code3 : '';
   }
 
-  function formatDate(ts){
+  // v1.1: the function sends FAA effective dates as calendar dates at UTC midnight
+  // (e.g. 2026-09-03T00:00:00Z); reading them in local time showed the day before
+  // anywhere west of UTC. utc=true reads the calendar date as sent; fetchedAt is a real
+  // moment, so it stays in local time.
+  function formatDate(ts, utc){
     const d = new Date(ts);
-    const day = String(d.getDate()).padStart(2, '0');
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return day + '-' + months[d.getMonth()] + '-' + d.getFullYear();
+    const day = String(utc ? d.getUTCDate() : d.getDate()).padStart(2, '0');
+    const mon = months[utc ? d.getUTCMonth() : d.getMonth()];
+    const yr = utc ? d.getUTCFullYear() : d.getFullYear();
+    return day + '-' + mon + '-' + yr;
   }
 
   const FAA_QUERY_PAGE = 'https://www.fly.faa.gov/rmt/nfdc_preferred_routes_database.jsp';
@@ -593,8 +601,8 @@
   function showFreshness(data){
     const link = '<a href="' + FAA_QUERY_PAGE + '" target="_blank" rel="noopener" class="freshness-link">Verify on FAA.gov</a>';
     if(data.effectiveFrom && data.effectiveUntil){
-      freshness.innerHTML = 'FAA data source: effective ' + formatDate(data.effectiveFrom) +
-        ' until ' + formatDate(data.effectiveUntil) + '. ' + link;
+      freshness.innerHTML = 'FAA data source: effective ' + formatDate(data.effectiveFrom, true) +
+        ' until ' + formatDate(data.effectiveUntil, true) + '. ' + link;
       freshness.title = 'From the FAA\u2019s own Preferred Routes Database query page, fetched ' + formatDate(data.fetchedAt) + '.';
     } else if(data.fetchedAt){
       freshness.innerHTML = 'FAA data source: fetched ' + formatDate(data.fetchedAt) +
@@ -795,6 +803,7 @@
       lastLoadedOrigin = null;
       originHint.textContent = 'Not a recognized TEC departure.';
       originHint.className = 'field-hint bad';
+      results.innerHTML = '';   // v1.1
       destInput.value = '';
       destInput.disabled = true;
       destInput.placeholder = 'Select a valid departure first';
@@ -817,6 +826,7 @@
       destHint.textContent = 'No TEC route to this airport from the selected departure.';
       destHint.className = 'field-hint bad';
       searchBtn.disabled = true;
+      results.innerHTML = '';   // v1.1: don't leave the previous pair's routes on screen
     }
   }
 
@@ -988,7 +998,7 @@
 
   function rowIsEastVariant(row){
     const blob = ((row['Area'] || '') + ' ' + (row['Route String'] || '')).toUpperCase();
-    return /\(LAXE\)|LAXE\b/.test(blob);
+    return /\(LAXE\)|LAXE\b|\bLAX\s+EAST\b/.test(blob);   // v1.1: also "LAX EAST" spelled out (e.g. LAXQ70)
   }
 
   function chip(label, value, restrict){
