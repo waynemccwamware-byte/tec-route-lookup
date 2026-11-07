@@ -374,8 +374,13 @@
   .ff-fields input{
     width:100%; box-sizing:border-box; font-family:var(--mono); font-size:16px; /* 16px: no iOS zoom */
     background:#0b0e12; color:var(--text-primary); border:1px solid var(--bezel-hi); border-radius:4px; padding:8px;
-    color-scheme:dark; min-height:40px;
+    color-scheme:dark; min-height:44px;
+    display:block; min-width:0; max-width:100%;
+    -webkit-appearance:none; appearance:none;   /* iOS Safari otherwise sizes date/time boxes wider than their column */
+    text-align:left;
   }
+  .ff-fields input::-webkit-date-and-time-value{ text-align:left; }
+  @media (max-width:480px){ .ff-fields{ grid-template-columns:minmax(0,1fr); gap:12px; } }
   .ff-fields input:focus{outline:2px solid var(--amber); outline-offset:1px;}
   .ff-readout{font-size:0.74rem; color:var(--teal); margin-top:4px; min-height:1em;}
   .ff-note{font-size:0.74rem; color:var(--text-muted); line-height:1.45;}
@@ -454,7 +459,7 @@
 <main>
 
   <section class="panel title-panel">
-    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.5</span></div>
+    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.6</span></div>
     <p>Tower Enroute Control routes, fetched fresh from the FAA's own preferred-routes database on every server request &mdash; no third-party or simulation-network data involved. <span id="freshness" class="freshness-inline"></span></p>
     <div class="freshness-row">
       <button class="update-btn" id="updateBtn">Update FAA data</button>
