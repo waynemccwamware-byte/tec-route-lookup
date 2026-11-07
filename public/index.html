@@ -454,7 +454,7 @@
 <main>
 
   <section class="panel title-panel">
-    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.4</span></div>
+    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.5</span></div>
     <p>Tower Enroute Control routes, fetched fresh from the FAA's own preferred-routes database on every server request &mdash; no third-party or simulation-network data involved. <span id="freshness" class="freshness-inline"></span></p>
     <div class="freshness-row">
       <button class="update-btn" id="updateBtn">Update FAA data</button>
@@ -516,7 +516,7 @@
   <div id="results"></div>
 
   <div class="legend">
-    <strong>Aircraft classification</strong> checkboxes are applied where the FAA data encodes it (either as letters baked into the altitude field, e.g. "JM110PQ70", or as plain-language restrictions in the aircraft/notes field); check as many as apply. Routes that carry no classification info for this pair are always shown, since they apply regardless of aircraft type. <strong>Landing East</strong> filters to route variants explicitly marked for LAX's East configuration when both exist; if only one variant exists for a pair, it's shown regardless of the checkbox. Departure/Destination accept either the 4-letter ICAO code (e.g. KSBA) or the 3-letter FAA identifier (e.g. SBA) and always display as the 4-letter form. <strong>Create flight in ForeFlight</strong> asks for the flight day and departure time, then opens Claude with the flight typed in; Claude saves it to your ForeFlight Flights through the ForeFlight Mobile connector (it does not file it). Always cross-check against the current Chart Supplement or your EFB before filing.
+    <strong>Aircraft classification</strong> checkboxes are applied where the FAA data encodes it (either as letters baked into the altitude field, e.g. "JM110PQ70", or as plain-language restrictions in the aircraft/notes field); check as many as apply. Routes that carry no classification info for this pair are always shown, since they apply regardless of aircraft type. <strong>Landing East</strong> filters to route variants explicitly marked for LAX's East configuration when both exist; if only one variant exists for a pair, it's shown regardless of the checkbox. Departure/Destination accept either the 4-letter ICAO code (e.g. KSBA) or the 3-letter FAA identifier (e.g. SBA) and always display as the 4-letter form. <strong>Create flight in ForeFlight</strong> asks for the flight day and departure time, then opens Claude with the flight typed in; Claude saves it to your ForeFlight Flights through the ForeFlight Mobile connector with your aircraft's weight-and-balance profile attached (it does not file it; enter people and baggage in ForeFlight). Always cross-check against the current Chart Supplement or your EFB before filing.
   </div>
 
 </main>
@@ -1233,8 +1233,9 @@
     lines.push('');
     lines.push('Aircraft: run list_aircraft and use my primary aircraft (primary_aircraft_id), passing aircraft_id, not the tail number.');
     lines.push('Performance profile: always pass performance_profile_id; leaving it out saves the flight with no profile. list_aircraft does not say which profile is the default, so use the profile on my most recent saved flight in that aircraft (list_flights with its aircraft_id, newest first, then get_flight_plan until one has a performance_profile) and check that id is in that aircraft\'s list. If none has one, ask me which profile.');
+    lines.push('Weight and balance: attach that aircraft\'s custom weight-and-balance profile by passing weight_and_balance_profile_id from its list_aircraft row. If it has exactly one, use it; if more than one, ask me which; if none, create the flight without one and say so. (The connector can\'t set people on board or seat weights; I enter those in ForeFlight.)');
     lines.push('If the ForeFlight connector isn\'t connected, say so and stop.');
-    lines.push('After creating it, check it with get_flight_plan and reply in one or two lines with what was saved (route, departure time in local and UTC, altitude, aircraft, performance profile).');
+    lines.push('After creating it, check it with get_flight_plan and reply in one or two lines with what was saved (route, departure time in local and UTC, altitude, aircraft, performance profile, weight-and-balance profile).');
     return lines.join('\n');
   }
 
