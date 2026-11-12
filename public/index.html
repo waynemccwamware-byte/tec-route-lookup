@@ -466,7 +466,7 @@
 <main>
 
   <section class="panel title-panel">
-    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.6</span></div>
+    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.7</span></div>
     <p>Tower Enroute Control routes, fetched fresh from the FAA's own preferred-routes database on every server request &mdash; no third-party or simulation-network data involved. <span id="freshness" class="freshness-inline"></span></p>
     <div class="freshness-row">
       <button class="update-btn" id="updateBtn">Update FAA data</button>
@@ -520,9 +520,7 @@
       <input type="checkbox" id="landingEast">
       <label for="landingEast">LAX landing East</label>
     </div>
-    <div class="hint">Leave unchecked for the standard/West configuration.</div>
-
-    <button class="go" id="searchBtn" disabled>Find routes</button>
+    <div class="hint">Leave unchecked for the standard/West configuration. Routes update automatically as you change any setting.</div>
   </section>
 
   <div id="results"></div>
@@ -601,7 +599,6 @@
   const destHint = document.getElementById('destHint');
   const aircraftChecks = document.getElementById('aircraftChecks');
   const landingEastChk = document.getElementById('landingEast');
-  const searchBtn = document.getElementById('searchBtn');
   const swapBtn = document.getElementById('swapBtn');
   const results = document.getElementById('results');
   const freshness = document.getElementById('freshness');
@@ -613,6 +610,17 @@
   let lastLoadedOrigin = null; // 3-letter, internal
   let lastShown = [];         // v1.3: route rows currently on screen (for the ForeFlight button)
   let lastClasses = [];
+
+  // v1.7: no Find routes button; the lookup runs on its own whenever the pair is valid.
+  // Routes are cached per pair, so class / LAX East changes re-filter instantly with no server call.
+  const routeCache = new Map();  // 'SBA|SMO' -> server response
+  let searchTimer = null;
+  let searchSeq = 0;             // drops responses that arrive after the inputs have changed
+  function cancelSearch(){ clearTimeout(searchTimer); searchTimer = null; searchSeq++; }
+  function scheduleSearch(delay){
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { searchTimer = null; runSearch(); }, delay || 0);
+  }
 
   function safeGet(key){ try{ return localStorage.getItem(key); }catch(e){ return null; } }
   function safeSet(key, val){ try{ localStorage.setItem(key, val); }catch(e){ /* ignore */ } }
@@ -800,7 +808,7 @@
         const savedDest = safeGet(LS_DEST);
         if(savedDest && validDestinations.includes(savedDest)){
           destInput.value = toDisplay(savedDest);
-          searchBtn.disabled = false;
+          scheduleSearch(0);
         }
       }
     }catch(err){
@@ -813,7 +821,7 @@
     destInput.disabled = true;
     destInput.placeholder = 'Loading\u2026';
     destHint.textContent = '';
-    searchBtn.disabled = true;
+    cancelSearch();
     validDestinations = [];
     try{
       const res = await fetch(FN + '?action=destinations&origin=' + encodeURIComponent(origin3));
@@ -853,25 +861,25 @@
       destInput.value = '';
       destInput.disabled = true;
       destInput.placeholder = 'Select a valid departure first';
-      searchBtn.disabled = true;
+      cancelSearch();
     }
   }
 
   function commitDest(){
     const raw = destInput.value;
-    if(!raw){ destHint.textContent = ''; destHint.className = 'field-hint'; searchBtn.disabled = true; return; }
+    if(!raw){ destHint.textContent = ''; destHint.className = 'field-hint'; cancelSearch(); results.innerHTML = ''; return; }
     const q = toQuery(raw);
     if(validDestinations.includes(q)){
       const disp = toDisplay(q);
       if(destInput.value !== disp) destInput.value = disp;
       destHint.textContent = '';
       destHint.className = 'field-hint';
-      searchBtn.disabled = false;
       safeSet(LS_DEST, q);
+      scheduleSearch(300);   // v1.7: debounced, so a half-typed code doesn't fire a lookup
     } else {
       destHint.textContent = 'No TEC route to this airport from the selected departure.';
       destHint.className = 'field-hint bad';
-      searchBtn.disabled = true;
+      cancelSearch();
       results.innerHTML = '';   // v1.1: don't leave the previous pair's routes on screen
     }
   }
@@ -901,7 +909,7 @@
       destInput.placeholder = 'Select departure first';
       destHint.textContent = '';
       destHint.className = 'field-hint';
-      searchBtn.disabled = true;
+      cancelSearch();
       results.innerHTML = '';
     }
   });
@@ -921,7 +929,7 @@
       destInput.value = '';
       destHint.textContent = '';
       destHint.className = 'field-hint';
-      searchBtn.disabled = true;
+      cancelSearch();
       results.innerHTML = '';
     }
   });
@@ -949,10 +957,10 @@
       destInput.value = toDisplay(newDest);
       destHint.textContent = '';
       destHint.className = 'field-hint';
-      searchBtn.disabled = false;
+      scheduleSearch(0);
       safeSet(LS_DEST, newDest);
     } else {
-      searchBtn.disabled = true;
+      cancelSearch();
       showMessage('empty', 'No TEC route from ' + toDisplay(newOrigin) + ' back to ' + toDisplay(newDest) + ' \u2014 pick a destination.');
     }
   });
@@ -969,6 +977,8 @@
       const data = await res.json();
       if(!res.ok) throw new Error(data.error || 'Request failed');
       validOrigins = data.origins || [];
+      routeCache.clear();   // v1.7: new FAA data, so drop cached routes
+      results.innerHTML = '';
       showFreshness(data);
 
       if(data.diff){
@@ -992,7 +1002,7 @@
         await loadDestinations(prevOrigin);
         if(prevDest && validDestinations.includes(prevDest)){
           destInput.value = toDisplay(prevDest);
-          searchBtn.disabled = false;
+          scheduleSearch(0);
         }
       }
     }catch(err){
@@ -1294,16 +1304,24 @@
     const selectedClasses = getSelectedClasses();
     const wantEast = landingEastChk.checked;
 
-    if(!origin || !dest){
-      showMessage('empty', 'Choose both a departure and a destination.');
-      return;
-    }
+    if(!origin || !dest || !validDestinations.includes(dest)) return;
 
-    showMessage('loading', 'Looking up ' + toDisplay(origin) + ' \u2192 ' + toDisplay(dest) + '\u2026');
+    const key = origin + '|' + dest;
+    // Same pair and filters already on screen (e.g. a blur or Enter re-commit): leave it alone
+    const renderKey = key + '|' + selectedClasses.join('') + '|' + (wantEast ? 'E' : 'W');
+    if(results.querySelector('.variant-note[data-rk="' + renderKey + '"]')) return;
+    const seq = ++searchSeq;
     try{
-      const res = await fetch(FN + '?action=routes&origin=' + encodeURIComponent(origin) + '&dest=' + encodeURIComponent(dest));
-      const data = await res.json();
-      if(!res.ok) throw new Error(data.error || 'Request failed');
+      let data = routeCache.get(key);
+      if(!data){
+        showMessage('loading', 'Looking up ' + toDisplay(origin) + ' \u2192 ' + toDisplay(dest) + '\u2026');
+        const res = await fetch(FN + '?action=routes&origin=' + encodeURIComponent(origin) + '&dest=' + encodeURIComponent(dest));
+        const json = await res.json();
+        if(!res.ok) throw new Error(json.error || 'Request failed');
+        data = json;
+        routeCache.set(key, data);
+      }
+      if(seq !== searchSeq) return;   // inputs changed while this was in flight
       showFreshness(data);
 
       let rows = data.routes || [];
@@ -1334,15 +1352,18 @@
         note += ' No route for this pair was tagged for the selected aircraft classification(s), so all classes are shown \u2014 check the altitude/restriction fields below.';
       }
 
-      results.innerHTML = '<div class="variant-note">' + escapeHTML(note) + '</div>' +
+      results.innerHTML = '<div class="variant-note" data-rk="' + escapeHTML(renderKey) + '">' + escapeHTML(note) + '</div>' +
         shown.map((r, i) => renderCard(r, rowIsEastVariant(r), i)).join('');
       lastShown = shown; lastClasses = selectedClasses.slice();
     }catch(err){
+      if(seq !== searchSeq) return;
       showMessage('error', "Couldn't complete the lookup. " + escapeHTML(err.message));
     }
   }
 
-  searchBtn.addEventListener('click', runSearch);
+  // v1.7: aircraft-class and LAX East changes re-run immediately (served from the cache)
+  aircraftChecks.addEventListener('change', () => { if(lastLoadedOrigin && validDestinations.includes(toQuery(destInput.value))) scheduleSearch(0); });
+  landingEastChk.addEventListener('change', () => { if(lastLoadedOrigin && validDestinations.includes(toQuery(destInput.value))) scheduleSearch(0); });
   updateBtn.addEventListener('click', forceUpdate);
 
   fetch('https://tally.yuki.sh/hits/wamware/tec-route-lookup.json')
