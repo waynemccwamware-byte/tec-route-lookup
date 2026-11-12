@@ -243,7 +243,7 @@
     font-size:0.9rem;
   }
   .checkbox-row input{width:17px; height:17px; accent-color:var(--amber);}
-  .checkbox-row .hint{color:var(--text-muted); font-size:0.77rem; margin-left:24px; margin-top:-3px;}
+  .checkbox-row .hint, .checkbox-row + .hint{color:var(--text-muted); font-size:0.77rem; margin-left:24px; margin-top:-3px;}
 
   .aircraft-checks{
     display:flex;
@@ -466,7 +466,7 @@
 <main>
 
   <section class="panel title-panel">
-    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.7</span></div>
+    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.7.1</span></div>
     <p>Tower Enroute Control routes, fetched fresh from the FAA's own preferred-routes database on every server request &mdash; no third-party or simulation-network data involved. <span id="freshness" class="freshness-inline"></span></p>
     <div class="freshness-row">
       <button class="update-btn" id="updateBtn">Update FAA data</button>
