@@ -78,7 +78,7 @@
   .update-result{font-size:0.76rem; color:var(--text-muted);}
   .update-result.changed{color:var(--amber);}
 
-  main{max-width:760px; margin:0 auto; padding:16px 16px 28px;}
+  main{max-width:760px; margin:0 auto; padding:6px 16px 28px;}   /* v1.7.2 (25-Nov-2026): was 16px on top (Wayne: less air above the title) */
 
   .panel{
     background:var(--bg-panel);
@@ -451,6 +451,12 @@
       else { var x = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); if (!x) return String(d || ''); y = +x[1]; m = +x[2] - 1; dd = +x[3]; }
       return (dd < 10 ? '0' : '') + dd + '-' + MON[lang][m] + '-' + y;
     },
+    // any 25-Nov-2026 in a string, in the current language (25-nov-2026)
+    dmy: function (str) {
+      if (!es) return String(str == null ? '' : str);
+      return String(str == null ? '' : str).replace(/\b(\d{1,2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{4})\b/g,
+        function (m, d, mo, y) { return d + '-' + MON.es[MON.en.indexOf(mo)] + '-' + y; });
+    },
     withLang: withLang,
     // Elements marked data-es="…" (innerHTML) or data-es-title, data-es-placeholder, … get their Spanish once.
     apply: function (root) {
@@ -569,7 +575,7 @@
 <main>
 
   <section class="panel title-panel">
-    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.7.1</span></div>
+    <div class="title-row"><h1>TEC Route Lookup</h1><span class="ver">v1.7.2</span></div>
     <p>Tower Enroute Control routes, fetched fresh from the FAA's own preferred-routes database on every server request &mdash; no third-party or simulation-network data involved. <span id="freshness" class="freshness-inline"></span></p>
     <div class="freshness-row">
       <button class="update-btn" id="updateBtn">Update FAA data</button>
